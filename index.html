@@ -411,51 +411,6 @@
     background: rgba(74,93,94,0.05);
   }
 
-  /* Suggestions */
-  .suggestions-section {
-    margin-top: 48px;
-    padding-top: 32px;
-    border-top: 1px solid rgba(181,150,125,0.2);
-  }
-  .suggestions-section h3 {
-    font-family: 'Bodoni Moda', 'Libre Bodoni', serif;
-    color: var(--very-dark-sage);
-    font-size: 18px;
-    margin-bottom: 12px;
-  }
-  .suggestions-section textarea {
-    width: 100%;
-    min-height: 120px;
-    padding: 16px;
-    border: 1.5px solid rgba(181,150,125,0.3);
-    border-radius: 8px;
-    font-family: 'Montserrat', sans-serif;
-    font-size: 14px;
-    color: var(--dark-sage);
-    background: var(--soft-cream);
-    resize: vertical;
-    line-height: 1.6;
-    transition: border-color 0.2s ease;
-  }
-  .suggestions-section textarea:focus {
-    outline: none;
-    border-color: var(--terracotta);
-  }
-  .suggestions-section .suggestion-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-    align-items: center;
-  }
-  .saved-notice {
-    font-size: 12px;
-    color: var(--warm-taupe);
-    font-style: italic;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  .saved-notice.show { opacity: 1; }
-
   /* Transitions */
   .fade-in {
     animation: fadeIn 0.3s ease forwards;
@@ -627,14 +582,6 @@
       <button class="btn btn-secondary" onclick="showLanding()">Back to Overview</button>
     </div>
 
-    <div class="suggestions-section">
-      <h3>Notes &amp; Suggestions</h3>
-      <textarea id="suggestionsBox" placeholder="Add your notes, feedback, or suggestions for this document..." oninput="saveSuggestion()"></textarea>
-      <div class="suggestion-actions">
-        <button class="btn btn-secondary" onclick="copySuggestions()">Copy Suggestions</button>
-        <span class="saved-notice" id="savedNotice">Saved</span>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -794,7 +741,6 @@ function showSession(num) {
   document.querySelector('.tab-btn[data-tab="guide"]').classList.add('active');
 
   renderContent();
-  loadSuggestion();
   window.scrollTo(0, 0);
   history.pushState({ session: num }, '', window.location.pathname + '#session-' + num);
 }
@@ -804,7 +750,6 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelector(`.tab-btn[data-tab="${tab}"]`).classList.add('active');
   renderContent();
-  loadSuggestion();
 }
 
 function renderContent() {
@@ -826,10 +771,14 @@ function renderMarkdown(md) {
   let listType = '';
   let listItems = [];
 
+  let olCounter = 0;
   function flushList() {
     if (!inList) return;
-    const tag = listType === 'ol' ? 'ol' : 'ul';
-    html += '<' + tag + '>' + listItems.map(li => '<li>' + inlineFormat(li) + '</li>').join('') + '</' + tag + '>';
+    if (listType === 'ol') {
+      html += '<ol start="' + (olCounter + 1) + '">' + listItems.map(function(li, idx) { olCounter++; return '<li>' + inlineFormat(li) + '</li>'; }).join('') + '</ol>';
+    } else {
+      html += '<ul>' + listItems.map(li => '<li>' + inlineFormat(li) + '</li>').join('') + '</ul>';
+    }
     inList = false;
     listItems = [];
   }
@@ -900,17 +849,17 @@ function renderMarkdown(md) {
 
     // Headers
     if (line.startsWith('### ')) {
-      flushList(); flushBlockquote(); flushTable();
+      flushList(); flushBlockquote(); flushTable(); olCounter = 0;
       html += '<h3>' + inlineFormat(line.slice(4)) + '</h3>';
       i++; continue;
     }
     if (line.startsWith('## ')) {
-      flushList(); flushBlockquote(); flushTable();
+      flushList(); flushBlockquote(); flushTable(); olCounter = 0;
       html += '<h2>' + inlineFormat(line.slice(3)) + '</h2>';
       i++; continue;
     }
     if (line.startsWith('# ')) {
-      flushList(); flushBlockquote(); flushTable();
+      flushList(); flushBlockquote(); flushTable(); olCounter = 0;
       html += '<h1>' + inlineFormat(line.slice(2)) + '</h1>';
       i++; continue;
     }
@@ -918,7 +867,7 @@ function renderMarkdown(md) {
     // Unordered list
     if (/^\s*[-*]\s+/.test(line)) {
       flushBlockquote(); flushTable();
-      if (!inList || listType !== 'ul') { flushList(); inList = true; listType = 'ul'; }
+      if (!inList || listType !== 'ul') { flushList(); olCounter = 0; inList = true; listType = 'ul'; }
       listItems.push(line.replace(/^\s*[-*]\s+/, ''));
       i++; continue;
     }
@@ -938,7 +887,7 @@ function renderMarkdown(md) {
     }
 
     // Paragraph
-    flushList(); flushBlockquote(); flushTable();
+    flushList(); flushBlockquote(); flushTable(); olCounter = 0;
     let para = line;
     while (i + 1 < lines.length && lines[i + 1].trim() !== '' && !lines[i + 1].startsWith('#') && !lines[i + 1].startsWith('|') && !lines[i + 1].startsWith('>') && !lines[i + 1].startsWith('---') && !/^\s*[-*]\s+/.test(lines[i + 1]) && !/^\s*\d+[.)\s]\s*/.test(lines[i + 1])) {
       i++;
@@ -967,38 +916,6 @@ function inlineFormat(text) {
 // ===== DOWNLOAD =====
 function downloadPDF() {
   window.print();
-}
-
-// ===== SUGGESTIONS (localStorage) =====
-function getSuggestionKey() {
-  return 'elm_suggestion_s' + currentSession + '_' + currentTab;
-}
-
-function saveSuggestion() {
-  const val = document.getElementById('suggestionsBox').value;
-  localStorage.setItem(getSuggestionKey(), val);
-  const notice = document.getElementById('savedNotice');
-  notice.classList.add('show');
-  setTimeout(() => notice.classList.remove('show'), 1500);
-}
-
-function loadSuggestion() {
-  const val = localStorage.getItem(getSuggestionKey()) || '';
-  document.getElementById('suggestionsBox').value = val;
-}
-
-function copySuggestions() {
-  const box = document.getElementById('suggestionsBox');
-  if (!box.value.trim()) return;
-  navigator.clipboard.writeText(box.value).then(() => {
-    const notice = document.getElementById('savedNotice');
-    notice.textContent = 'Copied!';
-    notice.classList.add('show');
-    setTimeout(() => {
-      notice.classList.remove('show');
-      notice.textContent = 'Saved';
-    }, 1500);
-  });
 }
 
 // ===== BACK BUTTON / HASH NAVIGATION =====
